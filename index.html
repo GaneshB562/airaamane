@@ -1,16 +1,175 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Todo App</title>
-  style.css
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+  <meta
+    name="description"
+    content="An advanced Todo application with priorities, due dates and filtering."
+  >
+
+  <title>Advanced Todo App</title>
+
+  <link.css
 </head>
+
 <body>
-  <h1>Todo App</h1>
+  <main class="app-container">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Task management</p>
+        <h1>Advanced Todo App</h1>
+        <p class="subtitle">
+          Organize tasks, priorities, and deadlines.
+        </p>
+      </div>
 
-  <input id="todoInput" type="text" placeholder="Enter task">
-  <button onclick="addTodo()">Add</button>
+      <button
+        id="clearCompletedButton"
+        class="secondary-button"
+        type="button"
+      >
+        Clear completed
+      </button>
+    </header>
 
-  <ul id="todoList"></ul>
+    <section class="task-form-section" aria-labelledby="formHeading">
+      <h2 id="formHeading">Create a task</h2>
+
+      <form id="todoForm" class="todo-form" novalidate>
+        <div class="form-field task-name-field">
+          <label for="todoInput">Task name</label>
+
+          <input
+            id="todoInput"
+            name="todo"
+            type="text"
+            maxlength="120"
+            placeholder="Enter a task"
+            autocomplete="off"
+            required
+          >
+
+          <p id="inputError" class="error-message" role="alert"></p>
+        </div>
+
+        <div class="form-field">
+          <label for="priorityInput">Priority</label>
+
+          <select id="priorityInput" name="priority">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label for="dueDateInput">Due date</label>
+
+          <input
+            id="dueDateInput"
+            name="dueDate"
+            type="date"
+          >
+        </div>
+
+        <button class="primary-button" type="submit">
+          Add task
+        </button>
+      </form>
+    </section>
+
+    <section class="toolbar" aria-label="Task controls">
+      <div class="form-field search-field">
+        <label for="searchInput">Search</label>
+
+        <input
+          id="searchInput"
+          type="search"
+          placeholder="Search tasks"
+          autocomplete="off"
+        >
+      </div>
+
+      <div class="form-field">
+        <label for="filterInput">Status</label>
+
+        <select id="filterInput">
+          <option value="all">All tasks</option>
+          <option value="active">Active tasks</option>
+          <option value="completed">Completed tasks</option>
+          <option value="overdue">Overdue tasks</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="statistics" aria-label="Task statistics">
+      <article class="stat-card">
+        <span id="totalCount" class="stat-value">0</span>
+        <span class="stat-label">Total</span>
+      </article>
+
+      <article class="stat-card">
+        <span id="activeCount" class="stat-value">0</span>
+        <span class="stat-label">Active</span>
+      </article>
+
+      <article class="stat-card">
+        <span id="completedCount" class="stat-value">0</span>
+        <span class="stat-label">Completed</span>
+      </article>
+
+      <article class="stat-card">
+        <span id="overdueCount" class="stat-value">0</span>
+        <span class="stat-label">Overdue</span>
+      </article>
+    </section>
+
+    <section class="task-list-section" aria-labelledby="tasksHeading">
+      <div class="section-heading">
+        <h2 id="tasksHeading">Your tasks</h2>
+        <span id="visibleTaskCount">0 tasks displayed</span>
+      </div>
+
+      <ul id="todoList" class="todo-list" aria-live="polite"></ul>
+
+      <p id="emptyState" class="empty-state">
+        No tasks found. Add your first task above.
+      </p>
+    </section>
+  </main>
+
+  <template id="todoTemplate">
+    <li class="todo-item">
+      <input
+        class="todo-checkbox"
+        type="checkbox"
+        aria-label="Mark task as completed"
+      >
+
+      <div class="todo-content">
+        <div class="todo-title-row">
+          <span class="todo-text"></span>
+          <span class="priority-badge"></span>
+        </div>
+
+        <span class="todo-due-date"></span>
+      </div>
+
+      <div class="todo-actions">
+        <button class="edit-button" type="button">
+          Edit
+        </button>
+
+        <button class="delete-button" type="button">
+          Delete
+        </button>
+      </div>
+    </li>
+  </template>
 
   app.jsscript>
 </body>
