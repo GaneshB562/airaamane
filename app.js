@@ -1,12 +1,15 @@
 "use strict";
 
 const STORAGE_KEY = "advanced-todo-app.tasks";
-
-const state = {
-  todos: loadTodos(),
-  filter: "all",
-  searchTerm: "",
-};
+const MIN_TASK_LENGTH = 3;
+const MAX_TASK_LENGTH = 120;
+const VALID_PRIORITIES = new Set(["low", "medium", "high"]);
+const VALID_FILTERS = new Set([
+  "all",
+  "active",
+  "completed",
+  "overdue",
+]);
 
 const elements = {
   form: document.querySelector("#todoForm"),
@@ -29,19 +32,57 @@ const elements = {
   overdueCount: document.querySelector("#overdueCount"),
 };
 
+validateRequiredElements();
+
+const state = {
+  todos: loadTodos(),
+  filter: "all",
+  searchTerm: "",
+};
+
+function validateRequiredElements() {
+  const missingElements = Object.entries(elements)
+    .filter(([, element]) => element === null)
+    .map(([name]) => name);
+
+  if (missingElements.length > 0) {
+    throw new Error(
+      `Missing required DOM elements: ${missingElements.join(", ")}`
+    );
+  }
+}
+
+function isValidTodo(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    typeof value.id === "string" &&
+    typeof value.text === "string" &&
+    value.text.trim().length >= MIN_TASK_LENGTH &&
+    typeof value.completed === "boolean" &&
+    VALID_PRIORITIES.has(value.priority) &&
+    (value.dueDate === "" || isValidDateValue(value.dueDate))
+  );
+}
+
 function loadTodos() {
   try {
-    const savedTodos = localStorage.getItem(STORAGE_KEY);
+    const savedValue = localStorage.getItem(STORAGE_KEY);
 
-    if (!savedTodos) {
+    if (!savedValue) {
       return [];
     }
 
-    const parsedTodos = JSON.parse(savedTodos);
+    const parsedValue = JSON.parse(savedValue);
 
-    return Array.isArray(parsedTodos) ? parsedTodos : [];
+    if (!Array.isArray(parsedValue)) {
+      console.warn("Stored todo data is not an array.");
+      return [];
+    }
+
+    return parsedValue.filter(isValidTodo);
   } catch (error) {
-    console.error("Unable to load saved tasks:", error);
+    console.error("Unable to load saved tasks.", error);
     return [];
   }
 }
@@ -53,31 +94,95 @@ function saveTodos() {
       JSON.stringify(state.todos)
     );
   } catch (error) {
-    console.error("Unable to save tasks:", error);
+    console.error("Unable to save tasks.", error);
+    showInputError(
+      "Tasks could not be saved in browser storage."
+    );
   }
 }
 
 function generateId() {
   if (
-    typeof crypto !== "undefined" &&
-    typeof crypto.randomUUID === "function"
+    globalThis.crypto &&
+    typeof globalThis.crypto.randomUUID === "function"
   ) {
-    return crypto.randomUUID();
+    return globalThis.crypto.randomUUID();
   }
 
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return [
+    Date.now().toString(36),
+    Math.random().toString(36).slice(2),
+  ].join("-");
+}
+
+function normalizeTaskName(value) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function isValidDateValue(value) {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+  if (!datePattern.test(value)) {
+    return false;
+  }
+
+  const parsedDate = new Date(`${value}T00:00:00`);
+
+  return !Number.isNaN(parsedDate.getTime());
 }
 
 function createTodo(text, priority, dueDate) {
+  const timestamp = new Date().toISOString();
+
   return {
     id: generateId(),
     text,
-    priority,
-    dueDate,
+    priority: VALID_PRIORITIES.has(priority)
+      ? priority
+      : "medium",
+    dueDate: isValidDateValue(dueDate) ? dueDate : "",
     completed: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
   };
+}
+
+function validateTaskName(taskName, excludedTodoId = null) {
+  if (!taskName) {
+    return "Enter a task name.";
+  }
+
+  if (taskName.length < MIN_TASK_LENGTH) {
+    return `Task name must contain at least ${MIN_TASK_LENGTH} characters.`;
+  }
+
+  if (taskName.length > MAX_TASK_LENGTH) {
+    return `Task name cannot exceed ${MAX_TASK_LENGTH} characters.`;
+  }
+
+  const duplicateExists = state.todos.some(
+    (todo) =>
+      todo.id !== excludedTodoId &&
+      todo.text.toLowerCase() === taskName.toLowerCase()
+  );
+
+  if (duplicateExists) {
+    return "A task with this name already exists.";
+  }
+
+  return "";
+}
+
+function showInputError(message) {
+  elements.inputError.textContent = message;
+  elements.todoInput.setAttribute(
+    "aria-invalid",
+    message ? "true" : "false"
+  );
 }
 
 function isOverdue(todo) {
@@ -85,19 +190,24 @@ function isOverdue(todo) {
     return false;
   }
 
+  if (!isValidDateValue(todo.dueDate)) {
+    return false;
+  }
+
   const dueDate = new Date(`${todo.dueDate}T23:59:59`);
+
   return dueDate.getTime() < Date.now();
 }
 
 function getFilteredTodos() {
-  const normalizedSearch = state.searchTerm
+  const normalizedSearchTerm = state.searchTerm
     .trim()
     .toLowerCase();
 
   return state.todos.filter((todo) => {
-    const matchesSearch = todo.text
-      .toLowerCase()
-      .includes(normalizedSearch);
+    const matchesSearch =
+      normalizedSearchTerm === "" ||
+      todo.text.toLowerCase().includes(normalizedSearchTerm);
 
     if (!matchesSearch) {
       return false;
@@ -121,7 +231,7 @@ function getFilteredTodos() {
 }
 
 function formatDueDate(dateValue) {
-  if (!dateValue) {
+  if (!dateValue || !isValidDateValue(dateValue)) {
     return "No due date";
   }
 
@@ -134,31 +244,24 @@ function formatDueDate(dateValue) {
   }).format(date);
 }
 
-function validateTaskName(taskName) {
-  if (!taskName) {
-    return "Enter a task name.";
-  }
-
-  if (taskName.length < 3) {
-    return "Task name must contain at least 3 characters.";
-  }
-
-  if (taskName.length > 120) {
-    return "Task name cannot exceed 120 characters.";
-  }
-
-  return "";
+function resetForm() {
+  elements.form.reset();
+  elements.priorityInput.value = "medium";
+  showInputError("");
+  elements.todoInput.focus();
 }
 
 function addTodo(event) {
   event.preventDefault();
 
-  const taskName = elements.todoInput.value.trim();
+  const taskName = normalizeTaskName(
+    elements.todoInput.value
+  );
+
   const validationError = validateTaskName(taskName);
 
-  elements.inputError.textContent = validationError;
-
   if (validationError) {
+    showInputError(validationError);
     elements.todoInput.focus();
     return;
   }
@@ -169,69 +272,88 @@ function addTodo(event) {
     elements.dueDateInput.value
   );
 
-  state.todos.unshift(todo);
+  state.todos = [todo, ...state.todos];
 
   saveTodos();
   resetForm();
   render();
 }
 
-function resetForm() {
-  elements.form.reset();
-  elements.priorityInput.value = "medium";
-  elements.inputError.textContent = "";
-  elements.todoInput.focus();
-}
-
 function toggleTodo(todoId) {
-  const todo = state.todos.find((item) => item.id === todoId);
+  const todoExists = state.todos.some(
+    (todo) => todo.id === todoId
+  );
 
-  if (!todo) {
+  if (!todoExists) {
+    console.warn(`Todo not found: ${todoId}`);
     return;
   }
 
-  todo.completed = !todo.completed;
-  todo.updatedAt = new Date().toISOString();
+  state.todos = state.todos.map((todo) =>
+    todo.id === todoId
+      ? {
+          ...todo,
+          completed: !todo.completed,
+          updatedAt: new Date().toISOString(),
+        }
+      : todo
+  );
 
   saveTodos();
   render();
 }
 
 function editTodo(todoId) {
-  const todo = state.todos.find((item) => item.id === todoId);
+  const todo = state.todos.find(
+    (item) => item.id === todoId
+  );
 
   if (!todo) {
+    console.warn(`Todo not found: ${todoId}`);
     return;
   }
 
-  const newTaskName = window.prompt(
+  const enteredValue = window.prompt(
     "Update the task name:",
     todo.text
   );
 
-  if (newTaskName === null) {
+  if (enteredValue === null) {
     return;
   }
 
-  const trimmedName = newTaskName.trim();
-  const validationError = validateTaskName(trimmedName);
+  const updatedTaskName = normalizeTaskName(enteredValue);
+  const validationError = validateTaskName(
+    updatedTaskName,
+    todoId
+  );
 
   if (validationError) {
     window.alert(validationError);
     return;
   }
 
-  todo.text = trimmedName;
-  todo.updatedAt = new Date().toISOString();
+  state.todos = state.todos.map((item) =>
+    item.id === todoId
+      ? {
+          ...item,
+          text: updatedTaskName,
+          updatedAt: new Date().toISOString(),
+        }
+      : item
+  );
 
   saveTodos();
   render();
 }
 
 function deleteTodo(todoId) {
-  const todo = state.todos.find((item) => item.id === todoId);
+  const todo = state.todos.find(
+    (item) => item.id === todoId
+  );
 
   if (!todo) {
+    console.warn(`Todo not found: ${todoId}`);
     return;
   }
 
@@ -252,16 +374,18 @@ function deleteTodo(todoId) {
 }
 
 function clearCompletedTodos() {
-  const completedTodos = state.todos.filter(
+  const completedCount = state.todos.filter(
     (todo) => todo.completed
-  );
+  ).length;
 
-  if (completedTodos.length === 0) {
+  if (completedCount === 0) {
     return;
   }
 
   const shouldClear = window.confirm(
-    `Delete ${completedTodos.length} completed task(s)?`
+    `Delete ${completedCount} completed ${
+      completedCount === 1 ? "task" : "tasks"
+    }?`
   );
 
   if (!shouldClear) {
@@ -277,7 +401,8 @@ function clearCompletedTodos() {
 }
 
 function createTodoElement(todo) {
-  const fragment = elements.todoTemplate.content.cloneNode(true);
+  const fragment =
+    elements.todoTemplate.content.cloneNode(true);
 
   const listItem = fragment.querySelector(".todo-item");
   const checkbox = fragment.querySelector(".todo-checkbox");
@@ -285,7 +410,23 @@ function createTodoElement(todo) {
   const priority = fragment.querySelector(".priority-badge");
   const dueDate = fragment.querySelector(".todo-due-date");
   const editButton = fragment.querySelector(".edit-button");
-  const deleteButton = fragment.querySelector(".delete-button");
+  const deleteButton = fragment.querySelector(
+    ".delete-button"
+  );
+
+  if (
+    !listItem ||
+    !checkbox ||
+    !text ||
+    !priority ||
+    !dueDate ||
+    !editButton ||
+    !deleteButton
+  ) {
+    throw new Error(
+      "Todo template does not contain all required elements."
+    );
+  }
 
   listItem.dataset.todoId = todo.id;
   listItem.classList.toggle("completed", todo.completed);
@@ -320,35 +461,42 @@ function createTodoElement(todo) {
 }
 
 function updateStatistics() {
-  const total = state.todos.length;
-  const completed = state.todos.filter(
+  const totalCount = state.todos.length;
+
+  const completedCount = state.todos.filter(
     (todo) => todo.completed
   ).length;
-  const active = total - completed;
-  const overdue = state.todos.filter(isOverdue).length;
 
-  elements.totalCount.textContent = String(total);
-  elements.activeCount.textContent = String(active);
-  elements.completedCount.textContent = String(completed);
-  elements.overdueCount.textContent = String(overdue);
+  const activeCount = totalCount - completedCount;
 
-  elements.clearCompletedButton.disabled = completed === 0;
+  const overdueCount = state.todos.filter(
+    isOverdue
+  ).length;
+
+  elements.totalCount.textContent = String(totalCount);
+  elements.activeCount.textContent = String(activeCount);
+  elements.completedCount.textContent =
+    String(completedCount);
+  elements.overdueCount.textContent = String(overdueCount);
+
+  elements.clearCompletedButton.disabled =
+    completedCount === 0;
 }
 
 function render() {
   const visibleTodos = getFilteredTodos();
+  const todoFragments = document.createDocumentFragment();
 
-  elements.todoList.replaceChildren();
+  for (const todo of visibleTodos) {
+    todoFragments.appendChild(createTodoElement(todo));
+  }
 
-  visibleTodos.forEach((todo) => {
-    elements.todoList.appendChild(createTodoElement(todo));
-  });
+  elements.todoList.replaceChildren(todoFragments);
 
   elements.emptyState.hidden = visibleTodos.length > 0;
 
-  const taskLabel = visibleTodos.length === 1
-    ? "task"
-    : "tasks";
+  const taskLabel =
+    visibleTodos.length === 1 ? "task" : "tasks";
 
   elements.visibleTaskCount.textContent =
     `${visibleTodos.length} ${taskLabel} displayed`;
@@ -356,21 +504,44 @@ function render() {
   updateStatistics();
 }
 
+function handleSearchInput(event) {
+  if (!(event.target instanceof HTMLInputElement)) {
+    return;
+  }
+
+  state.searchTerm = event.target.value;
+  render();
+}
+
+function handleFilterChange(event) {
+  if (!(event.target instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  const selectedFilter = event.target.value;
+
+  state.filter = VALID_FILTERS.has(selectedFilter)
+    ? selectedFilter
+    : "all";
+
+  render();
+}
+
 elements.form.addEventListener("submit", addTodo);
 
 elements.todoInput.addEventListener("input", () => {
-  elements.inputError.textContent = "";
+  showInputError("");
 });
 
-elements.searchInput.addEventListener("input", (event) => {
-  state.searchTerm = event.target.value;
-  render();
-});
+elements.searchInput.addEventListener(
+  "input",
+  handleSearchInput
+);
 
-elements.filterInput.addEventListener("change", (event) => {
-  state.filter = event.target.value;
-  render();
-});
+elements.filterInput.addEventListener(
+  "change",
+  handleFilterChange
+);
 
 elements.clearCompletedButton.addEventListener(
   "click",
@@ -378,4 +549,3 @@ elements.clearCompletedButton.addEventListener(
 );
 
 render();
-`
