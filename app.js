@@ -549,3 +549,14 @@ elements.clearCompletedButton.addEventListener(
 );
 
 render();
+
+export {
+  normalizeTaskName,
+  isValidDateValue,
+  createTodo,
+  validateTaskName,
+  isOverdue,
+  formatDueDate,
+  getFilteredTodos,
+  state,
+};
