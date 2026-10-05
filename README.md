@@ -20,4 +20,4 @@ and JavaScript.
 Install a simple local development server:
 
 ```bash
-npx serve .
+npx server .
