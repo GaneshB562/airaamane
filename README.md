@@ -1,13 +1,23 @@
-# Sample Todo App
+# Advanced Todo App
 
-Simple JavaScript Todo Application.
-
-## Run
-
-Open `index.html` in a browser.
+A browser-based task management application built with HTML, CSS,
+and JavaScript.
 
 ## Features
 
-- Add task
-- Delete task
-- View task list
+- Create, edit, complete, and delete tasks
+- Assign low, medium, or high priority
+- Set task due dates
+- Search tasks by name
+- Filter active, completed, and overdue tasks
+- Display task statistics
+- Persist tasks in browser storage
+- Responsive layout
+- Accessible form labels and controls
+
+## Running the application
+
+Install a simple local development server:
+
+```bash
+npx serve .
